@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"testing"
@@ -154,6 +155,71 @@ func TestPasswd(t *testing.T) {
 	testPasswd(t, dir)
 	// Mount and verify
 	test_helpers.MountOrFatal(t, dir, mnt, "-extpass", "echo newpasswd")
+	content, err := ioutil.ReadFile(file1)
+	if err != nil {
+		t.Error(err)
+	} else if string(content) != "somecontent" {
+		t.Errorf("wrong content: %q", string(content))
+	}
+	err = test_helpers.UnmountErr(mnt)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Test -L flag
+func TestFollowSymlinks(t *testing.T) {
+	CheckFollowSymlinks(t, false)
+	CheckFollowSymlinks(t, true)
+}
+
+func CheckFollowSymlinks(t *testing.T, remount bool) {
+	// Create FS
+	dir := test_helpers.InitFS(t, "-L")
+	mnt := dir + ".mnt"
+	aside := dir + ".aside"
+	err := os.Mkdir(aside, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Add content
+	test_helpers.MountOrFatal(t, dir, mnt, "-extpass", "echo test")
+	file1 := mnt + "/file1"
+	err = ioutil.WriteFile(file1, []byte("somecontent"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Move crypttext files aside and replace with symlinks
+	open_dir, err := os.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open_dir.Close()
+	dir_contents, err := open_dir.Readdirnames(-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range dir_contents {
+		file_path := dir + "/" + file
+		aside_path := aside + "/" + file
+		err = os.Rename(file_path, aside_path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.Symlink("../" + filepath.Base(aside) + "/" + file, file_path)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Re-mount
+	if remount {
+		err = test_helpers.UnmountErr(mnt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		test_helpers.MountOrFatal(t, dir, mnt, "-extpass", "echo test")
+	}
+	// Verify the file is still accessible
 	content, err := ioutil.ReadFile(file1)
 	if err != nil {
 		t.Error(err)
