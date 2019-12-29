@@ -18,6 +18,11 @@ go:
   - 1.13.x # Debian 11 "Bullseye"
   - stable
 
+# We support AMD64 (x86-64) and ARM64 (armv8/aarch64) CPUs.
+arch:
+  - amd64
+  - arm64
+
 before_install:
   - sudo apt-get install -qq fuse
   - sudo modprobe fuse
